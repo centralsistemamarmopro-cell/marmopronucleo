@@ -12,6 +12,14 @@ async function db(path, options = {}) {
   return response.status === 204 ? [] : response.json();
 }
 
+async function authAdmin(path, options = {}) {
+  if (!enabled) throw new Error('supabase_not_configured');
+  const response = await fetch(`${base}/auth/v1/admin/${path}`, { headers: { apikey: key, authorization: `Bearer ${key}`, accept: 'application/json', 'content-type': 'application/json' }, ...options });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(data?.msg || data?.message || data?.error_description || `supabase_auth_${response.status}`);
+  return data;
+}
+
 export async function listPlans() {
   return db('marmopro_plans?active=eq.true&order=sort_order.asc&select=key,name,description,monthly_price_brl,setup_price_brl');
 }
@@ -25,23 +33,15 @@ function slugify(value) {
   return value.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 50) || `marmopro-${Date.now()}`;
 }
 
-async function createOrganization(companyName, email) {
+async function createOrganization(companyName) {
   const id = crypto.randomUUID();
   const slug = `${slugify(companyName)}-${id.slice(0, 8)}`;
-  const rows = await db('organizations', {
-    method: 'POST',
-    headers: { prefer: 'return=representation' },
-    body: JSON.stringify({ id, name: companyName, slug, plan: 'pending' })
-  });
+  const rows = await db('organizations', { method: 'POST', headers: { prefer: 'return=representation' }, body: JSON.stringify({ id, name: companyName, slug, plan: 'pending' }) });
   return rows[0];
 }
 
-async function createPendingSubscription(organizationId, planId) {
-  const rows = await db('marmopro_subscriptions', {
-    method: 'POST',
-    headers: { prefer: 'return=representation' },
-    body: JSON.stringify({ organization_id: organizationId, plan_id: planId, status: 'pending' })
-  });
+async function createPendingSubscription(organizationId, planId, email) {
+  const rows = await db('marmopro_subscriptions', { method: 'POST', headers: { prefer: 'return=representation' }, body: JSON.stringify({ organization_id: organizationId, plan_id: planId, customer_email: email, status: 'pending' }) });
   return rows[0];
 }
 
@@ -59,11 +59,7 @@ function stripeForm(data) {
 
 async function stripe(path, data) {
   if (!process.env.STRIPE_SECRET_KEY) throw new Error('stripe_not_configured');
-  const response = await fetch(`https://api.stripe.com/v1/${path}`, {
-    method: 'POST',
-    headers: { authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`, 'content-type': 'application/x-www-form-urlencoded' },
-    body: stripeForm(data)
-  });
+  const response = await fetch(`https://api.stripe.com/v1/${path}`, { method: 'POST', headers: { authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}`, 'content-type': 'application/x-www-form-urlencoded' }, body: stripeForm(data) });
   const payload = await response.json();
   if (!response.ok) throw new Error(payload?.error?.message || 'stripe_request_failed');
   return payload;
@@ -74,64 +70,68 @@ export async function createCheckout({ planKey, companyName, email }) {
   const plan = await getPlan(planKey);
   if (!plan) throw new Error('plan_not_found');
   if (plan.key === 'custom') throw new Error('custom_plan_requires_contact');
-
-  const organization = await createOrganization(companyName, email);
-  const subscription = await createPendingSubscription(organization.id, plan.id);
+  const organization = await createOrganization(companyName);
+  const subscription = await createPendingSubscription(organization.id, plan.id, email);
   const origin = process.env.PUBLIC_APP_URL || 'http://localhost:3000';
-  const items = [
-    { price_data: { currency: 'brl', product_data: { name: plan.name }, unit_amount: Math.round(Number(plan.monthly_price_brl) * 100), recurring: { interval: 'month' } }, quantity: 1 }
-  ];
+  const items = [{ price_data: { currency: 'brl', product_data: { name: plan.name }, unit_amount: Math.round(Number(plan.monthly_price_brl) * 100), recurring: { interval: 'month' } }, quantity: 1 }];
   if (Number(plan.setup_price_brl) > 0) items.push({ price_data: { currency: 'brl', product_data: { name: `Implantação ${plan.name}` }, unit_amount: Math.round(Number(plan.setup_price_brl) * 100) }, quantity: 1 });
-
   const session = await stripe('checkout/sessions', {
-    mode: 'subscription',
-    customer_email: email,
+    mode: 'subscription', customer_email: email,
     success_url: `${origin}/?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${origin}/?checkout=cancelled`,
-    'line_items': items,
-    'metadata[organization_id]': organization.id,
-    'metadata[subscription_id]': subscription.id,
-    'metadata[plan_key]': plan.key,
-    'subscription_data[metadata][organization_id]': organization.id,
-    'subscription_data[metadata][subscription_id]': subscription.id,
-    'subscription_data[metadata][plan_key]': plan.key
+    cancel_url: `${origin}/?checkout=cancelled`, line_items: items,
+    'metadata[organization_id]': organization.id, 'metadata[subscription_id]': subscription.id, 'metadata[plan_key]': plan.key,
+    'subscription_data[metadata][organization_id]': organization.id, 'subscription_data[metadata][subscription_id]': subscription.id, 'subscription_data[metadata][plan_key]': plan.key
   });
-
-  await db(`marmopro_subscriptions?id=eq.${subscription.id}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ stripe_checkout_session_id: session.id, stripe_customer_id: session.customer || null })
-  });
+  await db(`marmopro_subscriptions?id=eq.${subscription.id}`, { method: 'PATCH', body: JSON.stringify({ stripe_checkout_session_id: session.id, stripe_customer_id: session.customer || null }) });
   return { checkoutUrl: session.url, sessionId: session.id, organizationId: organization.id, plan: plan.key };
 }
 
 function signatureIsValid(rawBody, signature, secret) {
   if (!signature || !secret) return false;
-  const parts = Object.fromEntries(signature.split(',').map(part => part.split('=')));
-  const timestamp = parts.t;
-  const received = parts.v1;
+  const values = signature.split(',').reduce((acc, part) => { const [k, v] = part.split('=', 2); if (k && v) acc[k] = v; return acc; }, {});
+  const timestamp = values.t, received = values.v1;
   if (!timestamp || !received) return false;
   const age = Math.abs(Date.now() / 1000 - Number(timestamp));
   if (!Number.isFinite(age) || age > 300) return false;
-  const signed = `${timestamp}.${rawBody}`;
-  const expected = crypto.createHmac('sha256', secret).update(signed).digest('hex');
-  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(received));
+  const expected = crypto.createHmac('sha256', secret).update(`${timestamp}.${rawBody}`).digest('hex');
+  const a = Buffer.from(expected), b = Buffer.from(received);
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
 }
 
 async function syncPlanEntitlements(organizationId, planId) {
   await db('rpc/marmopro_sync_entitlements', { method: 'POST', body: JSON.stringify({ p_organization_id: organizationId, p_plan_id: planId }) });
 }
 
+async function provisionAccess(current) {
+  if (!current.customer_email || current.access_provisioned_at) return;
+  let user = null;
+  try {
+    const invited = await authAdmin('invite', { method: 'POST', body: JSON.stringify({ email: current.customer_email, data: { organization_id: current.organization_id, marmopro_role: 'owner' }, redirect_to: `${process.env.PUBLIC_APP_URL || 'http://localhost:3000'}/` }) });
+    user = invited?.user || invited;
+  } catch {
+    const page = await authAdmin('users?page=1&per_page=1000', { method: 'GET' });
+    user = page?.users?.find(u => u.email?.toLowerCase() === current.customer_email.toLowerCase()) || null;
+    if (!user) throw new Error('access_provisioning_failed');
+  }
+  if (user?.id) {
+    await db('organization_members', { method: 'POST', headers: { prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify({ organization_id: current.organization_id, user_id: user.id, role: 'owner' }) });
+    await db(`marmopro_subscriptions?id=eq.${current.id}`, { method: 'PATCH', body: JSON.stringify({ access_user_id: user.id, access_provisioned_at: new Date().toISOString() }) });
+  }
+}
+
 async function activateSubscription(subscriptionId, stripeSubscription) {
-  const rows = await db(`marmopro_subscriptions?id=eq.${subscriptionId}&select=id,organization_id,plan_id&limit=1`);
+  const rows = await db(`marmopro_subscriptions?id=eq.${subscriptionId}&select=id,organization_id,plan_id,customer_email,access_provisioned_at&limit=1`);
   const current = rows[0];
   if (!current) return;
-  await db(`marmopro_subscriptions?id=eq.${subscriptionId}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ status: stripeSubscription.status === 'active' ? 'active' : stripeSubscription.status, stripe_subscription_id: stripeSubscription.id, stripe_customer_id: stripeSubscription.customer, current_period_start: stripeSubscription.current_period_start ? new Date(stripeSubscription.current_period_start * 1000).toISOString() : null, current_period_end: stripeSubscription.current_period_end ? new Date(stripeSubscription.current_period_end * 1000).toISOString() : null, cancel_at_period_end: Boolean(stripeSubscription.cancel_at_period_end), activated_at: new Date().toISOString() })
-  });
-  if (stripeSubscription.status === 'active' || stripeSubscription.status === 'trialing') {
-    await db(`organizations?id=eq.${current.organization_id}`, { method: 'PATCH', body: JSON.stringify({ plan: (await db(`marmopro_plans?id=eq.${current.plan_id}&select=key&limit=1`))[0]?.key || 'active', updated_at: new Date().toISOString() }) });
+  const status = stripeSubscription.status === 'active' ? 'active' : stripeSubscription.status;
+  await db(`marmopro_subscriptions?id=eq.${subscriptionId}`, { method: 'PATCH', body: JSON.stringify({ status, stripe_subscription_id: stripeSubscription.id, stripe_customer_id: stripeSubscription.customer, current_period_start: stripeSubscription.current_period_start ? new Date(stripeSubscription.current_period_start * 1000).toISOString() : null, current_period_end: stripeSubscription.current_period_end ? new Date(stripeSubscription.current_period_end * 1000).toISOString() : null, cancel_at_period_end: Boolean(stripeSubscription.cancel_at_period_end), activated_at: status === 'active' || status === 'trialing' ? new Date().toISOString() : null }) });
+  if (status === 'active' || status === 'trialing') {
+    const plan = (await db(`marmopro_plans?id=eq.${current.plan_id}&select=key&limit=1`))[0];
+    await db(`organizations?id=eq.${current.organization_id}`, { method: 'PATCH', body: JSON.stringify({ plan: plan?.key || 'active', updated_at: new Date().toISOString() }) });
     await syncPlanEntitlements(current.organization_id, current.plan_id);
+    await provisionAccess(current);
+  } else if (['canceled', 'unpaid', 'incomplete_expired'].includes(status)) {
+    await db(`marmopro_entitlements?organization_id=eq.${current.organization_id}&source=eq.plan`, { method: 'DELETE' });
   }
 }
 
@@ -141,15 +141,13 @@ export async function handleStripeWebhook(rawBody, signature) {
   const existing = await db(`marmopro_payment_events?event_id=eq.${encodeURIComponent(event.id)}&select=id&limit=1`);
   if (existing.length) return { received: true, duplicate: true };
   await db('marmopro_payment_events', { method: 'POST', body: JSON.stringify({ event_id: event.id, event_type: event.type, payload: event }) });
-
   if (event.type === 'checkout.session.completed') {
-    const session = event.data.object;
-    const orgId = session.metadata?.organization_id;
-    const subscriptionId = session.metadata?.subscription_id;
-    if (orgId && subscriptionId) {
+    const session = event.data.object, subscriptionId = session.metadata?.subscription_id;
+    if (subscriptionId) {
       await db(`marmopro_subscriptions?id=eq.${subscriptionId}`, { method: 'PATCH', body: JSON.stringify({ stripe_customer_id: session.customer || null, stripe_subscription_id: session.subscription || null }) });
       if (session.subscription && process.env.STRIPE_SECRET_KEY) {
-        const sub = await fetch(`https://api.stripe.com/v1/subscriptions/${session.subscription}`, { headers: { authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` } }).then(r => r.json());
+        const subResponse = await fetch(`https://api.stripe.com/v1/subscriptions/${session.subscription}`, { headers: { authorization: `Bearer ${process.env.STRIPE_SECRET_KEY}` } });
+        const sub = await subResponse.json();
         if (sub.id) await activateSubscription(subscriptionId, sub);
       }
     }
@@ -163,6 +161,6 @@ export async function handleStripeWebhook(rawBody, signature) {
 }
 
 export async function featureEnabled(organizationId, featureKey) {
-  const rows = await db(`rpc/marmopro_has_feature`, { method: 'POST', body: JSON.stringify({ p_organization_id: organizationId, p_feature_key: featureKey }) });
-  return rows === true || rows?.[0] === true;
+  const value = await db('rpc/marmopro_has_feature', { method: 'POST', body: JSON.stringify({ p_organization_id: organizationId, p_feature_key: featureKey }) });
+  return value === true || value?.[0] === true;
 }
