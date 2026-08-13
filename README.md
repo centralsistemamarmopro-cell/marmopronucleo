@@ -4,7 +4,7 @@ Base central do ecossistema MarmoPro: operação, CRM, marketing, suporte, agent
 
 ## Estado atual
 
-A base de código, CI e schema de produção estão versionados no GitHub. O projeto Supabase conectado está ativo e recebeu as migrations de segurança, persistência e licenciamento comercial. O runtime usa Supabase quando `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` estão configurados e mantém fallback local para desenvolvimento.
+A base de código, CI e schema estão versionados no GitHub. O projeto Supabase conectado está ativo e recebeu migrations de segurança, persistência, licenciamento e otimização. O runtime usa Supabase quando `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` estão configurados e mantém fallback local para desenvolvimento.
 
 ## Comercial e licenciamento
 
@@ -23,6 +23,7 @@ A página de planos consulta o banco e envia o cliente ao checkout online. A lib
 ## O que está funcionando
 
 - API HTTP e health check em `/health` e `/api/health`.
+- Endpoint `/api/ready` para verificar dependências críticas sem expor segredos.
 - Dashboard web em `/` com seleção de planos.
 - Checkout online por plano.
 - Webhook de pagamento com assinatura, idempotência e atualização da assinatura.
@@ -37,6 +38,9 @@ A página de planos consulta o banco e envia o cliente ao checkout online. A lib
 - Briefing de marketing e atualização de métricas por campanha.
 - Adaptadores isolados para WhatsApp, Instagram e Facebook.
 - PostgreSQL/Supabase com organizações, membros, clientes, leads, conversas, mensagens, IA, integrações, produção, auditoria e RLS.
+- Hardening de funções SECURITY DEFINER e `search_path`.
+- Índices de chaves estrangeiras e remoção de índices duplicados críticos.
+- Headers de segurança, CORS restrito ao `APP_ORIGIN`, limite de requisições e limite de payload.
 - Testes automatizados e GitHub Actions CI.
 - Runbook de produção em `docs/PRODUCAO.md`.
 
@@ -58,6 +62,7 @@ Copie `.env.example` para `.env` quando precisar configurar integrações. Nunca
 
 - `GET /health`
 - `GET /api/health`
+- `GET /api/ready`
 - `GET /api/dashboard`
 - `GET /api/plans`
 - `GET /api/marketing/dashboard`
@@ -79,6 +84,7 @@ Preencha os secrets no ambiente de execução:
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `ADMIN_TOKEN`
 - `PUBLIC_APP_URL`
+- `APP_ORIGIN`
 - `STRIPE_SECRET_KEY`
 - `STRIPE_WEBHOOK_SECRET`
 - `AI_API_URL`, `AI_API_KEY`, `AI_MODEL` (se IA externa for usada)
@@ -139,4 +145,4 @@ supabase/migrations/ schema versionado
 
 ## Critério para produção
 
-CI verde, migrations aplicadas, secrets configurados, webhook de pagamento validado, Auth configurado para convites, health check respondendo e validação dos fluxos críticos antes da abertura pública.
+O código está tecnicamente preparado. A abertura pública somente deve ocorrer depois de configurar secrets, domínio, Auth, webhooks e credenciais externas e validar os fluxos reais. Nenhuma integração externa é declarada ativa sem teste contra o respectivo provedor.
