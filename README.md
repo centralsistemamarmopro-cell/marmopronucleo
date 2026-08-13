@@ -6,13 +6,15 @@ Base central do ecossistema MarmoPro: operação, CRM, marketing, suporte, agent
 
 - API HTTP e health check.
 - Dashboard web em `/`.
-- Cadastro de leads.
+- Cadastro de leads com origem/campanha.
 - Chatbot com agente humanizado e escalonamento para humano.
-- Métricas operacionais básicas.
+- Métricas operacionais e dashboard de marketing.
 - Campanhas de marketing protegidas por autenticação administrativa.
+- Briefing de marketing e atualização de métricas por campanha.
 - Adaptadores isolados para WhatsApp, Instagram e Facebook.
 - Persistência local para desenvolvimento.
 - Modelo PostgreSQL/Supabase para produção.
+- Estrutura de segmentos, conteúdos, eventos, automações e consentimentos.
 - Testes e GitHub Actions CI.
 
 ## Executar localmente
@@ -33,11 +35,18 @@ Copie `.env.example` para `.env` quando precisar configurar integrações. Nunca
 
 - `GET /api/health`
 - `GET /api/dashboard`
+- `GET /api/marketing/dashboard`
 - `GET /api/integrations`
 - `POST /api/leads`
 - `POST /api/chat`
 - `POST /api/campaigns` (admin)
+- `POST /api/campaigns/metrics` (admin)
+- `POST /api/marketing/brief` (admin)
 - `POST /api/messages/send` (admin)
+
+## Marketing
+
+O módulo de Marketing cobre campanhas, segmentação, conteúdo, calendário, jornadas, automações, consentimento, atribuição e KPIs. A estrutura detalhada está em `05-MODULOS/MARKETING-ESTRUTURA.md` e as extensões de produção em `09-BANCO-DE-DADOS/marketing.sql`.
 
 ## Arquitetura
 
