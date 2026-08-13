@@ -3,26 +3,26 @@ import assert from 'node:assert/strict';
 import { replyToMessage } from '../server/agent.js';
 import { integrationStatus, sendMessage } from '../server/integrations.js';
 
-test('agent handles greeting', () => {
-  const result = replyToMessage('Oi');
+test('agent handles greeting', async () => {
+  const result = await replyToMessage('Oi');
   assert.equal(result.intent, 'greeting');
   assert.equal(result.escalate, false);
 });
 
-test('agent handles sales intent', () => {
-  const result = replyToMessage('Quero um orçamento');
+test('agent handles sales intent', async () => {
+  const result = await replyToMessage('Quero um orçamento');
   assert.equal(result.intent, 'sales');
   assert.equal(result.escalate, false);
 });
 
-test('agent escalates human support requests', () => {
-  const result = replyToMessage('Preciso falar com um atendente');
+test('agent escalates human support requests', async () => {
+  const result = await replyToMessage('Preciso falar com um atendente');
   assert.equal(result.intent, 'escalation');
   assert.equal(result.escalate, true);
 });
 
-test('agent handles order status', () => {
-  const result = replyToMessage('Qual o status do meu pedido?');
+test('agent handles order status', async () => {
+  const result = await replyToMessage('Qual o status do meu pedido?');
   assert.equal(result.intent, 'order_status');
 });
 
