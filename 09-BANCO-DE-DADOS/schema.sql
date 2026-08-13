@@ -1,0 +1,12 @@
+-- Modelo inicial PostgreSQL/Supabase. IDs e timestamps devem ser gerados no banco.
+create table if not exists companies (id uuid primary key default gen_random_uuid(), name text not null, created_at timestamptz not null default now());
+create table if not exists users (id uuid primary key default gen_random_uuid(), company_id uuid references companies(id), name text not null, email text unique, role text not null default 'operator', created_at timestamptz not null default now());
+create table if not exists leads (id uuid primary key default gen_random_uuid(), company_id uuid references companies(id), name text, email text, phone text, source text, status text not null default 'new', created_at timestamptz not null default now());
+create table if not exists conversations (id uuid primary key default gen_random_uuid(), company_id uuid references companies(id), lead_id uuid references leads(id), channel text, status text not null default 'open', escalated boolean not null default false, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create table if not exists messages (id uuid primary key default gen_random_uuid(), conversation_id uuid not null references conversations(id) on delete cascade, role text not null, body text not null, intent text, provider_message_id text, created_at timestamptz not null default now());
+create table if not exists campaigns (id uuid primary key default gen_random_uuid(), company_id uuid references companies(id), name text not null, channel text, status text not null default 'draft', audience jsonb not null default '{}'::jsonb, created_at timestamptz not null default now());
+create table if not exists integrations (id uuid primary key default gen_random_uuid(), company_id uuid references companies(id), provider text not null, status text not null default 'inactive', external_id text, created_at timestamptz not null default now(), unique(company_id, provider));
+create table if not exists audit_events (id uuid primary key default gen_random_uuid(), company_id uuid references companies(id), actor_id uuid references users(id), event_type text not null, payload jsonb not null default '{}'::jsonb, created_at timestamptz not null default now());
+create index if not exists idx_leads_company_status on leads(company_id,status);
+create index if not exists idx_messages_conversation on messages(conversation_id,created_at);
+create index if not exists idx_audit_company_time on audit_events(company_id,created_at);
