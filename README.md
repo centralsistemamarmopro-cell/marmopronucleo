@@ -1,23 +1,58 @@
 # MarmoPro Núcleo
 
-Base central do ecossistema MarmoPro.
+Base central do ecossistema MarmoPro: operação, CRM, marketing, suporte, agentes e integrações.
 
-## Objetivo
+## O que já está funcionando
 
-Organizar a arquitetura interna, operações, marketing, integrações de mídia social, agentes inteligentes e suporte em uma base única, modular e preparada para evolução.
+- API HTTP e health check.
+- Dashboard web em `/`.
+- Cadastro de leads.
+- Chatbot com agente humanizado e escalonamento para humano.
+- Métricas operacionais básicas.
+- Campanhas de marketing protegidas por autenticação administrativa.
+- Adaptadores isolados para WhatsApp, Instagram e Facebook.
+- Persistência local para desenvolvimento.
+- Modelo PostgreSQL/Supabase para produção.
+- Testes e GitHub Actions CI.
 
-## Escopo inicial
+## Executar localmente
 
-- Arquitetura interna e regras gerais
-- Marketing e jornada comercial
-- Integrações com aplicativos de mídia social
-- Agente humanizado MarmoPro
-- Chatbot de suporte
-- Inteligência, automações e roteamento
-- Banco de dados e contratos de integração
-- Segurança, governança, testes e prevenção de falhas
+Requisito: Node.js 20+.
 
-## Estrutura
+```bash
+npm run check
+npm test
+npm start
+```
+
+Abra `http://localhost:3000`.
+
+Copie `.env.example` para `.env` quando precisar configurar integrações. Nunca coloque tokens no Git.
+
+## API principal
+
+- `GET /api/health`
+- `GET /api/dashboard`
+- `GET /api/integrations`
+- `POST /api/leads`
+- `POST /api/chat`
+- `POST /api/campaigns` (admin)
+- `POST /api/messages/send` (admin)
+
+## Arquitetura
+
+```text
+Canais sociais / Web
+        -> Webhooks/API
+        -> CRM + Marketing
+        -> Agent Router
+        -> Agente / IA / Humano
+        -> Persistência + Auditoria
+```
+
+Integrações externas ficam isoladas em adaptadores. Credenciais entram somente por variáveis de ambiente/secrets.
+
+## Estrutura documental
 
 ```text
 00-DOCUMENTO-MAE/    visão geral e princípios
@@ -39,15 +74,6 @@ Organizar a arquitetura interna, operações, marketing, integrações de mídia
 16-GOVERNANCA/       segurança, permissões e governança
 ```
 
-## Princípios
+## Próxima camada de produção
 
-1. Modularidade sem duplicação de regras.
-2. Integrações externas isoladas por adaptadores.
-3. Agentes com identidade, escopo, limites e escalonamento definidos.
-4. Dados sensíveis protegidos e nunca versionados no repositório.
-5. Toda automação deve ser observável, idempotente quando aplicável e recuperável.
-6. Mudanças estruturais devem ser documentadas.
-
-## Estado
-
-Este repositório inicia a fundação consolidada do MarmoPro Núcleo. A implementação de produção deve seguir os contratos e regras documentados aqui.
+A documentação em `docs/IMPLEMENTACAO.md` define a migração para PostgreSQL/Supabase, autenticação/RBAC, provedor de IA, webhooks oficiais, filas, observabilidade e requisitos LGPD.
