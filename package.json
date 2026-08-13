@@ -1,0 +1,13 @@
+{
+  "name": "marmopro-nucleo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Núcleo operacional do ecossistema MarmoPro",
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test",
+    "check": "node --check server/index.js && node --check server/app.js && node --check server/agent.js && node --check server/store.js"
+  },
+  "engines": { "node": ">=20" }
+}
