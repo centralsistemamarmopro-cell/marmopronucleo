@@ -18,14 +18,14 @@ O MarmoPro usa um único motor com módulos/recursos licenciáveis por organiza�
 | Enterprise | R$ 899 | R$ 3.990 |
 | Custom | Sob consulta | Sob consulta |
 
-A página de planos consulta o banco e envia o cliente ao Stripe Checkout. A liberação não depende do navegador: o webhook assinado atualiza a assinatura, sincroniza os recursos liberados e provisiona o acesso da organização.
+A página de planos consulta o banco e envia o cliente ao checkout online. A liberação não depende do navegador: o webhook assinado atualiza a assinatura, sincroniza os recursos liberados e provisiona o acesso da organização.
 
 ## O que está funcionando
 
 - API HTTP e health check em `/health` e `/api/health`.
 - Dashboard web em `/` com seleção de planos.
 - Checkout online por plano.
-- Webhook Stripe com assinatura, idempotência e atualização da assinatura.
+- Webhook de pagamento com assinatura, idempotência e atualização da assinatura.
 - Licenciamento por organização, plano e recurso.
 - Provisionamento de acesso após assinatura ativa.
 - Cadastro de leads com origem/campanha.
@@ -84,14 +84,14 @@ Preencha os secrets no ambiente de execução:
 - `AI_API_URL`, `AI_API_KEY`, `AI_MODEL` (se IA externa for usada)
 - credenciais Meta/WhatsApp/Instagram/Facebook
 
-Configure no Stripe o webhook para `/api/billing/webhook` e mantenha as chaves somente como secrets do ambiente. O Supabase Auth precisa ter o envio de convites por e-mail configurado para que novos responsáveis recebam automaticamente o convite de acesso; o convite é feito por ação administrativa no servidor. citeturn1search0turn1search1
+Configure no provedor de pagamento o webhook para `/api/billing/webhook` e mantenha as chaves somente como secrets do ambiente. O Supabase Auth precisa ter o envio de convites por e-mail configurado para que novos responsáveis recebam automaticamente o convite de acesso.
 
 ## Arquitetura
 
 ```text
 Cliente
   -> Planos
-  -> Checkout Stripe
+  -> Checkout
   -> Webhook assinado
   -> Assinatura
   -> Plano
@@ -139,4 +139,4 @@ supabase/migrations/ schema versionado
 
 ## Critério para produção
 
-CI verde, migrations aplicadas, secrets configurados, Stripe webhook validado, Auth configurado para convites, health check respondendo e validação dos fluxos críticos antes da abertura pública.
+CI verde, migrations aplicadas, secrets configurados, webhook de pagamento validado, Auth configurado para convites, health check respondendo e validação dos fluxos críticos antes da abertura pública.
