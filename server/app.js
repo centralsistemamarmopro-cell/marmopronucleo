@@ -38,7 +38,7 @@ export async function handle(req, res) {
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'x-content-type-options': 'nosniff' });
       return res.end(html);
     }
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'marmopro-nucleo', time: new Date().toISOString() });
+    if (req.method === 'GET' && (url.pathname === '/health' || url.pathname === '/api/health')) return json(res, 200, { ok: true, service: 'marmopro-nucleo', time: new Date().toISOString(), ai: Boolean(process.env.AI_API_URL && process.env.AI_API_KEY && process.env.AI_MODEL) });
     if (req.method === 'GET' && url.pathname === '/api/dashboard') return json(res, 200, { leads: store.leads.length, conversations: store.conversations.length, messages: store.messages.length, campaigns: store.campaigns.length, escalations: store.conversations.filter(c => c.escalated).length });
     if (req.method === 'GET' && url.pathname === '/api/marketing/dashboard') return json(res, 200, marketingDashboard(store));
     if (req.method === 'GET' && url.pathname === '/api/integrations') return json(res, 200, integrationStatus());
@@ -53,7 +53,8 @@ export async function handle(req, res) {
       const data = await body(req); const conversationId = data.conversationId || randomUUID();
       let conversation = store.conversations.find(c => c.id === conversationId);
       if (!conversation) { conversation = { id: conversationId, escalated: false, createdAt: new Date().toISOString() }; store.conversations.push(conversation); }
-      const answer = replyToMessage(data.message, data.context); conversation.escalated ||= answer.escalate;
+      const answer = await replyToMessage(data.message, data.context);
+      conversation.escalated ||= answer.escalate;
       store.messages.push({ id: id('msg'), conversationId, role: 'user', text: data.message, createdAt: new Date().toISOString() });
       store.messages.push({ id: id('msg'), conversationId, role: 'assistant', text: answer.text, intent: answer.intent, createdAt: new Date().toISOString() });
       await saveStore(store); return json(res, 200, { conversationId, ...answer });
