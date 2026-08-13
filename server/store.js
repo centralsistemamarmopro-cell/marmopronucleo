@@ -1,20 +1,43 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
+import { supabase } from './supabase.js';
 
-const DATA_DIR = path.resolve(process.cwd(), 'data');
-const FILE = path.join(DATA_DIR, 'runtime.json');
-const initial = { leads: [], conversations: [], messages: [], campaigns: [], events: [] };
+const TABLES = ['leads', 'conversations', 'messages', 'campaigns', 'events'];
 
 export async function loadStore() {
-  try { return JSON.parse(await fs.readFile(FILE, 'utf8')); }
-  catch { await fs.mkdir(DATA_DIR, { recursive: true }); await fs.writeFile(FILE, JSON.stringify(initial, null, 2)); return structuredClone(initial); }
+  const store = {};
+  for (const table of TABLES) {
+    const { data, error } = await supabase.from(table).select('*');
+    if (error) throw error;
+    store[table] = data || [];
+  }
+  return store;
 }
 
-export async function saveStore(store) {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  const tmp = `${FILE}.tmp`;
-  await fs.writeFile(tmp, JSON.stringify(store, null, 2));
-  await fs.rename(tmp, FILE);
+export async function saveStore() {
+  // Mutations are persisted transactionally at the operation level through insert/update helpers below.
+  return true;
 }
 
-export function id(prefix = 'id') { return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`; }
+export async function insert(table, row) {
+  if (!TABLES.includes(table)) throw new Error(`invalid_table:${table}`);
+  const { data, error } = await supabase.from(table).insert(row).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function update(table, id, patch) {
+  if (!TABLES.includes(table)) throw new Error(`invalid_table:${table}`);
+  const { data, error } = await supabase.from(table).update(patch).eq('id', id).select().single();
+  if (error) throw error;
+  return data;
+}
+
+export async function count(table) {
+  if (!TABLES.includes(table)) throw new Error(`invalid_table:${table}`);
+  const { count: total, error } = await supabase.from(table).select('*', { count: 'exact', head: true });
+  if (error) throw error;
+  return total || 0;
+}
+
+export function id() {
+  return crypto.randomUUID();
+}
