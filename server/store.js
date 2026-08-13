@@ -31,19 +31,13 @@ async function saveRemote(store) {
 }
 
 export async function loadStore() {
-  if (remoteEnabled) {
-    try { return (await loadRemote()) || structuredClone(initial); }
-    catch (error) { console.error('Supabase store unavailable; using local fallback.', error.message); }
-  }
+  if (remoteEnabled) return (await loadRemote()) || structuredClone(initial);
   try { return JSON.parse(await fs.readFile(FILE, 'utf8')); }
   catch { await fs.mkdir(DATA_DIR, { recursive: true }); await fs.writeFile(FILE, JSON.stringify(initial, null, 2)); return structuredClone(initial); }
 }
 
 export async function saveStore(store) {
-  if (remoteEnabled) {
-    try { await saveRemote(store); return; }
-    catch (error) { console.error('Supabase save failed; writing local fallback.', error.message); }
-  }
+  if (remoteEnabled) return saveRemote(store);
   await fs.mkdir(DATA_DIR, { recursive: true });
   const tmp = `${FILE}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(store, null, 2));
