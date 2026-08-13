@@ -4,6 +4,7 @@ import path from 'node:path';
 import { loadStore, saveStore, id } from './store.js';
 import { replyToMessage } from './agent.js';
 import { integrationStatus, sendMessage } from './integrations.js';
+import { createCampaign, updateCampaignMetrics, marketingDashboard, generateMarketingBrief } from './marketing.js';
 
 const store = await loadStore();
 const rate = new Map();
@@ -39,11 +40,12 @@ export async function handle(req, res) {
     }
     if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'marmopro-nucleo', time: new Date().toISOString() });
     if (req.method === 'GET' && url.pathname === '/api/dashboard') return json(res, 200, { leads: store.leads.length, conversations: store.conversations.length, messages: store.messages.length, campaigns: store.campaigns.length, escalations: store.conversations.filter(c => c.escalated).length });
+    if (req.method === 'GET' && url.pathname === '/api/marketing/dashboard') return json(res, 200, marketingDashboard(store));
     if (req.method === 'GET' && url.pathname === '/api/integrations') return json(res, 200, integrationStatus());
 
     if (req.method === 'POST' && url.pathname === '/api/leads') {
       const data = await body(req); if (!data.name && !data.phone && !data.email) return json(res, 400, { error: 'lead_identifier_required' });
-      const lead = { id: id('lead'), name: data.name || '', phone: data.phone || '', email: data.email || '', source: data.source || 'direct', status: 'new', createdAt: new Date().toISOString() };
+      const lead = { id: id('lead'), name: data.name || '', phone: data.phone || '', email: data.email || '', source: data.source || 'direct', campaignId: data.campaignId || null, status: 'new', createdAt: new Date().toISOString() };
       store.leads.push(lead); await saveStore(store); return json(res, 201, lead);
     }
 
@@ -59,9 +61,20 @@ export async function handle(req, res) {
 
     if (req.method === 'POST' && url.pathname === '/api/campaigns') {
       if (!auth(req)) return json(res, 401, { error: 'admin_auth_required' });
-      const data = await body(req); if (!data.name) return json(res, 400, { error: 'campaign_name_required' });
-      const campaign = { id: id('campaign'), name: data.name, channel: data.channel || 'internal', status: 'draft', audience: data.audience || 'all', createdAt: new Date().toISOString() };
+      const campaign = createCampaign(await body(req));
       store.campaigns.push(campaign); await saveStore(store); return json(res, 201, campaign);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/campaigns/metrics') {
+      if (!auth(req)) return json(res, 401, { error: 'admin_auth_required' });
+      const data = await body(req); const campaign = store.campaigns.find(c => c.id === data.campaignId);
+      if (!campaign) return json(res, 404, { error: 'campaign_not_found' });
+      updateCampaignMetrics(campaign, data); await saveStore(store); return json(res, 200, campaign);
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/marketing/brief') {
+      if (!auth(req)) return json(res, 401, { error: 'admin_auth_required' });
+      return json(res, 200, generateMarketingBrief(await body(req)));
     }
 
     if (req.method === 'POST' && url.pathname === '/api/messages/send') {
