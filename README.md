@@ -2,20 +2,25 @@
 
 Base central do ecossistema MarmoPro: operação, CRM, marketing, suporte, agentes e integrações.
 
-## O que já está funcionando
+## Estado atual
 
-- API HTTP e health check.
+A base de código, CI e schema de produção estão versionados no GitHub. O projeto Supabase conectado está ativo e recebeu as migrations de segurança e persistência. O runtime usa Supabase quando `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` estão configurados e mantém fallback local para desenvolvimento.
+
+## O que está funcionando
+
+- API HTTP e health check em `/health` e `/api/health`.
 - Dashboard web em `/`.
 - Cadastro de leads com origem/campanha.
-- Chatbot com agente humanizado e escalonamento para humano.
+- Chatbot com agente humanizado, classificação de intenção e escalonamento para humano.
+- Integração opcional com provedor de IA compatível com Chat Completions.
+- Persistência remota no Supabase com fallback local.
 - Métricas operacionais e dashboard de marketing.
 - Campanhas de marketing protegidas por autenticação administrativa.
 - Briefing de marketing e atualização de métricas por campanha.
 - Adaptadores isolados para WhatsApp, Instagram e Facebook.
-- Persistência local para desenvolvimento.
-- Modelo PostgreSQL/Supabase para produção.
-- Estrutura de segmentos, conteúdos, eventos, automações e consentimentos.
-- Testes e GitHub Actions CI.
+- PostgreSQL/Supabase com organizações, membros, clientes, leads, conversas, mensagens, IA, integrações, produção, auditoria e RLS.
+- Testes automatizados e GitHub Actions CI.
+- Runbook de produção em `docs/PRODUCAO.md`.
 
 ## Executar localmente
 
@@ -33,6 +38,7 @@ Copie `.env.example` para `.env` quando precisar configurar integrações. Nunca
 
 ## API principal
 
+- `GET /health`
 - `GET /api/health`
 - `GET /api/dashboard`
 - `GET /api/marketing/dashboard`
@@ -44,9 +50,17 @@ Copie `.env.example` para `.env` quando precisar configurar integrações. Nunca
 - `POST /api/marketing/brief` (admin)
 - `POST /api/messages/send` (admin)
 
-## Marketing
+## Configuração de produção
 
-O módulo de Marketing cobre campanhas, segmentação, conteúdo, calendário, jornadas, automações, consentimento, atribuição e KPIs. A estrutura detalhada está em `05-MODULOS/MARKETING-ESTRUTURA.md` e as extensões de produção em `09-BANCO-DE-DADOS/marketing.sql`.
+Preencha os secrets no ambiente de execução:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `ADMIN_TOKEN`
+- `AI_API_URL`, `AI_API_KEY`, `AI_MODEL` (se IA externa for usada)
+- credenciais Meta/WhatsApp/Instagram/Facebook
+
+Nenhum segredo é necessário no repositório.
 
 ## Arquitetura
 
@@ -56,7 +70,7 @@ Canais sociais / Web
         -> CRM + Marketing
         -> Agent Router
         -> Agente / IA / Humano
-        -> Persistência + Auditoria
+        -> Supabase + Auditoria
 ```
 
 Integrações externas ficam isoladas em adaptadores. Credenciais entram somente por variáveis de ambiente/secrets.
@@ -81,8 +95,10 @@ Integrações externas ficam isoladas em adaptadores. Credenciais entram somente
 14-SUPORTE/          suporte e atendimento
 15-TESTES/            estratégia de testes
 16-GOVERNANCA/       segurança, permissões e governança
+docs/                runbooks e implementação
+supabase/migrations/ schema versionado
 ```
 
-## Próxima camada de produção
+## Critério para produção
 
-A documentação em `docs/IMPLEMENTACAO.md` define a migração para PostgreSQL/Supabase, autenticação/RBAC, provedor de IA, webhooks oficiais, filas, observabilidade e requisitos LGPD.
+CI verde, migrations aplicadas, secrets configurados, health check respondendo e validação dos fluxos críticos antes da abertura pública.
