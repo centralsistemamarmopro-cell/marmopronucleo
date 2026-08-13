@@ -1,0 +1,24 @@
+-- MarmoPro Marketing: extensão PostgreSQL/Supabase. Aplicar depois de schema.sql.
+create extension if not exists pgcrypto;
+alter table campaigns add column if not exists objective text not null default 'lead_generation';
+alter table campaigns add column if not exists budget numeric(14,2) not null default 0;
+alter table campaigns add column if not exists starts_at timestamptz;
+alter table campaigns add column if not exists ends_at timestamptz;
+alter table campaigns add column if not exists utm jsonb not null default '{}'::jsonb;
+alter table campaigns add column if not exists metrics jsonb not null default '{"reach":0,"impressions":0,"engagements":0,"clicks":0,"leads":0,"conversions":0,"spend":0}'::jsonb;
+create table if not exists marketing_segments (id uuid primary key default gen_random_uuid(), company_id uuid not null references companies(id) on delete cascade, name text not null, description text, rules jsonb not null default '{}'::jsonb, active boolean not null default true, created_at timestamptz not null default now());
+create table if not exists campaign_contents (id uuid primary key default gen_random_uuid(), campaign_id uuid not null references campaigns(id) on delete cascade, channel text not null, title text, body text, media jsonb not null default '[]'::jsonb, status text not null default 'draft', scheduled_at timestamptz, published_at timestamptz, external_id text, created_at timestamptz not null default now());
+create table if not exists campaign_events (id uuid primary key default gen_random_uuid(), company_id uuid not null references companies(id) on delete cascade, campaign_id uuid references campaigns(id) on delete set null, lead_id uuid references leads(id) on delete set null, channel text, event_type text not null, value numeric not null default 1, metadata jsonb not null default '{}'::jsonb, occurred_at timestamptz not null default now());
+create table if not exists marketing_automations (id uuid primary key default gen_random_uuid(), company_id uuid not null references companies(id) on delete cascade, name text not null, trigger_type text not null, conditions jsonb not null default '{}'::jsonb, actions jsonb not null default '[]'::jsonb, active boolean not null default true, created_at timestamptz not null default now(), updated_at timestamptz not null default now());
+create table if not exists marketing_consents (id uuid primary key default gen_random_uuid(), company_id uuid not null references companies(id) on delete cascade, lead_id uuid not null references leads(id) on delete cascade, channel text not null, purpose text not null, status text not null check (status in ('granted','revoked','unknown')), source text, recorded_at timestamptz not null default now(), revoked_at timestamptz);
+create index if not exists idx_marketing_segments_company on marketing_segments(company_id, active);
+create index if not exists idx_campaign_contents_campaign on campaign_contents(campaign_id, scheduled_at);
+create index if not exists idx_campaign_events_campaign_time on campaign_events(campaign_id, occurred_at);
+create index if not exists idx_campaign_events_lead on campaign_events(lead_id, occurred_at);
+create index if not exists idx_marketing_automations_company on marketing_automations(company_id, active);
+create index if not exists idx_marketing_consents_lead_channel on marketing_consents(lead_id, channel, purpose);
+alter table marketing_segments enable row level security;
+alter table campaign_contents enable row level security;
+alter table campaign_events enable row level security;
+alter table marketing_automations enable row level security;
+alter table marketing_consents enable row level security;
