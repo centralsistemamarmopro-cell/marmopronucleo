@@ -5,6 +5,7 @@ import { loadStore, saveStore, id } from './store.js';
 import { replyToMessage } from './agent.js';
 import { integrationStatus, sendMessage } from './integrations.js';
 import { createCampaign, updateCampaignMetrics, marketingDashboard, generateMarketingBrief } from './marketing.js';
+import { listPlans, createCheckout, handleStripeWebhook } from './billing.js';
 
 const store = await loadStore();
 const rate = new Map();
@@ -21,27 +22,39 @@ function allowed(req) {
   if (now - hit.start > 60_000) { hit.start = now; hit.count = 0; }
   hit.count++; rate.set(key, hit); return hit.count <= Number(process.env.RATE_LIMIT_PER_MINUTE || 120);
 }
-async function body(req) {
+async function rawBody(req) {
   let raw = ''; for await (const chunk of req) raw += chunk;
-  if (!raw) return {};
-  if (raw.length > 1_000_000) throw new Error('payload_too_large');
-  return JSON.parse(raw);
+  if (raw.length > 2_000_000) throw new Error('payload_too_large');
+  return raw;
 }
+async function body(req) { const raw = await rawBody(req); if (!raw) return {}; return JSON.parse(raw); }
 function route(req) { return new URL(req.url, 'http://localhost'); }
 
 export async function handle(req, res) {
   if (!allowed(req)) return json(res, 429, { error: 'rate_limit' });
   const url = route(req);
   try {
+    if (req.method === 'POST' && url.pathname === '/api/billing/webhook') {
+      const raw = await rawBody(req);
+      const result = await handleStripeWebhook(raw, req.headers['stripe-signature']);
+      return json(res, 200, result);
+    }
     if (req.method === 'GET' && url.pathname === '/') {
       const html = await fs.readFile(webIndex, 'utf8');
       res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'x-content-type-options': 'nosniff' });
       return res.end(html);
     }
-    if (req.method === 'GET' && (url.pathname === '/health' || url.pathname === '/api/health')) return json(res, 200, { ok: true, service: 'marmopro-nucleo', time: new Date().toISOString(), ai: Boolean(process.env.AI_API_URL && process.env.AI_API_KEY && process.env.AI_MODEL) });
+    if (req.method === 'GET' && (url.pathname === '/health' || url.pathname === '/api/health')) return json(res, 200, { ok: true, service: 'marmopro-nucleo', time: new Date().toISOString(), ai: Boolean(process.env.AI_API_URL && process.env.AI_API_KEY && process.env.AI_MODEL), billing: Boolean(process.env.STRIPE_SECRET_KEY && process.env.STRIPE_WEBHOOK_SECRET) });
     if (req.method === 'GET' && url.pathname === '/api/dashboard') return json(res, 200, { leads: store.leads.length, conversations: store.conversations.length, messages: store.messages.length, campaigns: store.campaigns.length, escalations: store.conversations.filter(c => c.escalated).length });
+    if (req.method === 'GET' && url.pathname === '/api/plans') return json(res, 200, await listPlans());
     if (req.method === 'GET' && url.pathname === '/api/marketing/dashboard') return json(res, 200, marketingDashboard(store));
     if (req.method === 'GET' && url.pathname === '/api/integrations') return json(res, 200, integrationStatus());
+
+    if (req.method === 'POST' && url.pathname === '/api/billing/checkout') {
+      const data = await body(req);
+      const result = await createCheckout({ planKey: data.planKey, companyName: data.companyName, email: data.email });
+      return json(res, 201, result);
+    }
 
     if (req.method === 'POST' && url.pathname === '/api/leads') {
       const data = await body(req); if (!data.name && !data.phone && !data.email) return json(res, 400, { error: 'lead_identifier_required' });
