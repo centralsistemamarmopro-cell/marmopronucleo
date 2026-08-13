@@ -1,10 +1,13 @@
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs/promises';
+import path from 'node:path';
 import { loadStore, saveStore, id } from './store.js';
 import { replyToMessage } from './agent.js';
 import { integrationStatus, sendMessage } from './integrations.js';
 
 const store = await loadStore();
 const rate = new Map();
+const webIndex = path.resolve(process.cwd(), 'web/index.html');
 
 function json(res, status, data) {
   res.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' });
@@ -29,6 +32,11 @@ export async function handle(req, res) {
   if (!allowed(req)) return json(res, 429, { error: 'rate_limit' });
   const url = route(req);
   try {
+    if (req.method === 'GET' && url.pathname === '/') {
+      const html = await fs.readFile(webIndex, 'utf8');
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8', 'x-content-type-options': 'nosniff' });
+      return res.end(html);
+    }
     if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, { ok: true, service: 'marmopro-nucleo', time: new Date().toISOString() });
     if (req.method === 'GET' && url.pathname === '/api/dashboard') return json(res, 200, { leads: store.leads.length, conversations: store.conversations.length, messages: store.messages.length, campaigns: store.campaigns.length, escalations: store.conversations.filter(c => c.escalated).length });
     if (req.method === 'GET' && url.pathname === '/api/integrations') return json(res, 200, integrationStatus());
