@@ -1,15 +1,33 @@
 # MarmoPro Núcleo
 
-Base central do ecossistema MarmoPro: operação, CRM, marketing, suporte, agentes e integrações.
+Base central do ecossistema MarmoPro: operação, CRM, marketing, suporte, agentes, integrações e licenciamento.
 
 ## Estado atual
 
-A base de código, CI e schema de produção estão versionados no GitHub. O projeto Supabase conectado está ativo e recebeu as migrations de segurança e persistência. O runtime usa Supabase quando `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` estão configurados e mantém fallback local para desenvolvimento.
+A base de código, CI e schema de produção estão versionados no GitHub. O projeto Supabase conectado está ativo e recebeu as migrations de segurança, persistência e licenciamento comercial. O runtime usa Supabase quando `SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` estão configurados e mantém fallback local para desenvolvimento.
+
+## Comercial e licenciamento
+
+O MarmoPro usa um único motor com módulos/recursos licenciáveis por organização.
+
+| Plano | Mensalidade | Implantação |
+|---|---:|---:|
+| Start | R$ 149 | R$ 490 |
+| Profissional | R$ 299 | R$ 990 |
+| Premium | R$ 499 | R$ 1.990 |
+| Enterprise | R$ 899 | R$ 3.990 |
+| Custom | Sob consulta | Sob consulta |
+
+A página de planos consulta o banco e envia o cliente ao Stripe Checkout. A liberação não depende do navegador: o webhook assinado atualiza a assinatura, sincroniza os recursos liberados e provisiona o acesso da organização.
 
 ## O que está funcionando
 
 - API HTTP e health check em `/health` e `/api/health`.
-- Dashboard web em `/`.
+- Dashboard web em `/` com seleção de planos.
+- Checkout online por plano.
+- Webhook Stripe com assinatura, idempotência e atualização da assinatura.
+- Licenciamento por organização, plano e recurso.
+- Provisionamento de acesso após assinatura ativa.
 - Cadastro de leads com origem/campanha.
 - Chatbot com agente humanizado, classificação de intenção e escalonamento para humano.
 - Integração opcional com provedor de IA compatível com Chat Completions.
@@ -41,8 +59,11 @@ Copie `.env.example` para `.env` quando precisar configurar integrações. Nunca
 - `GET /health`
 - `GET /api/health`
 - `GET /api/dashboard`
+- `GET /api/plans`
 - `GET /api/marketing/dashboard`
 - `GET /api/integrations`
+- `POST /api/billing/checkout`
+- `POST /api/billing/webhook`
 - `POST /api/leads`
 - `POST /api/chat`
 - `POST /api/campaigns` (admin)
@@ -57,12 +78,29 @@ Preencha os secrets no ambiente de execução:
 - `SUPABASE_URL`
 - `SUPABASE_SERVICE_ROLE_KEY`
 - `ADMIN_TOKEN`
+- `PUBLIC_APP_URL`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
 - `AI_API_URL`, `AI_API_KEY`, `AI_MODEL` (se IA externa for usada)
 - credenciais Meta/WhatsApp/Instagram/Facebook
 
-Nenhum segredo é necessário no repositório.
+Configure no Stripe o webhook para `/api/billing/webhook` e mantenha as chaves somente como secrets do ambiente. O Supabase Auth precisa ter o envio de convites por e-mail configurado para que novos responsáveis recebam automaticamente o convite de acesso; o convite é feito por ação administrativa no servidor. citeturn1search0turn1search1
 
 ## Arquitetura
+
+```text
+Cliente
+  -> Planos
+  -> Checkout Stripe
+  -> Webhook assinado
+  -> Assinatura
+  -> Plano
+  -> Entitlements
+  -> Organização + usuário
+  -> Módulos liberados
+```
+
+Para a operação normal:
 
 ```text
 Canais sociais / Web
@@ -91,7 +129,7 @@ Integrações externas ficam isoladas em adaptadores. Credenciais entram somente
 10-INTEGRACOES/      integrações externas
 11-EMPRESAS/         estruturas por empresa/unidade
 12-IDENTIDADE/       identidade e padrões de comunicação
-13-DOCUMENTOS/       documentos e templates
+13-DOCUMENTOS/       documentos, templates e licenciamento
 14-SUPORTE/          suporte e atendimento
 15-TESTES/            estratégia de testes
 16-GOVERNANCA/       segurança, permissões e governança
@@ -101,4 +139,4 @@ supabase/migrations/ schema versionado
 
 ## Critério para produção
 
-CI verde, migrations aplicadas, secrets configurados, health check respondendo e validação dos fluxos críticos antes da abertura pública.
+CI verde, migrations aplicadas, secrets configurados, Stripe webhook validado, Auth configurado para convites, health check respondendo e validação dos fluxos críticos antes da abertura pública.
