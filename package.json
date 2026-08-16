@@ -1,13 +1,24 @@
 {
-  "name": "marmopro-nucleo",
-  "version": "1.0.0",
+  "name": "marmopro",
+  "version": "2.0.0",
   "private": true,
-  "description": "Núcleo operacional do ecossistema MarmoPro",
+  "description": "MarmoPro — plataforma SaaS para gestão e operação de marmorarias",
   "type": "module",
   "scripts": {
-    "start": "node server/index.js",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "legacy:start": "node server/index.js",
     "test": "node --test",
     "check": "node --check server/index.js && node --check server/app.js && node --check server/agent.js && node --check server/store.js"
   },
-  "engines": { "node": ">=20" }
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.0",
+    "lucide-react": "^0.468.0",
+    "next": "^15.5.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0"
+  }
 }
