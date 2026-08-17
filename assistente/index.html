@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#171717">
+<meta name="description" content="Assistente pessoal e profissional de rotina — conversa, memória, tarefas e lembretes.">
+<link rel="manifest" href="manifest.json">
+<title>Amanda — Assistente</title>
+<style>
+:root{--bg:#f5f5f4;--card:#fff;--ink:#171717;--muted:#737373;--line:#e5e5e5;--accent:#171717;--soft:#f0f0ef;--danger:#b42318;--ok:#16734a;--warn:#9a6700}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}button,input,textarea{font:inherit}button{cursor:pointer}.app{max-width:760px;margin:auto;min-height:100vh;padding:18px 16px 92px}.top{display:flex;justify-content:space-between;align-items:center;margin-bottom:18px}.brand{font-weight:800;font-size:22px}.date{color:var(--muted);font-size:13px}.hero{background:#171717;color:#fff;border-radius:24px;padding:22px;margin-bottom:14px}.hero h1{font-size:28px;margin:0 0 7px}.hero p{margin:0;color:#d4d4d4}.section{margin-top:18px}.section h2{font-size:15px;margin:0 0 9px}.card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:9px}.task{display:flex;align-items:center;gap:11px}.check{width:26px;height:26px;border:2px solid #a3a3a3;border-radius:50%;background:white;flex:none}.check.done{background:#171717;border-color:#171717;position:relative}.check.done:after{content:'✓';color:white;position:absolute;left:5px;top:0;font-size:16px}.task-main{flex:1}.task-title{font-weight:700}.task-meta{font-size:12px;color:var(--muted);margin-top:3px}.pill{font-size:11px;padding:4px 8px;border-radius:999px;background:var(--soft);color:#555}.empty{color:var(--muted);font-size:13px;padding:8px 2px}.composer{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);width:min(728px,calc(100% - 24px));display:flex;gap:8px;background:rgba(255,255,255,.94);border:1px solid var(--line);border-radius:20px;padding:8px;box-shadow:0 8px 35px rgba(0,0,0,.12);backdrop-filter:blur(12px)}.composer input{flex:1;border:0;outline:0;background:transparent;padding:10px}.mic,.send{border:0;border-radius:14px;width:44px;height:44px}.mic{background:#eee}.send{background:#171717;color:white}.mic.listening{background:#fee2e2;color:#b42318}.chat{display:none}.chat.active{display:block}.msg{padding:12px 14px;border-radius:16px;margin:7px 0;max-width:90%;line-height:1.4;font-size:14px}.me{background:#171717;color:#fff;margin-left:auto}.bot{background:#fff;border:1px solid var(--line)}.tabs{display:flex;gap:7px;margin:12px 0;overflow:auto}.tab{border:1px solid var(--line);background:#fff;border-radius:999px;padding:8px 13px;font-size:12px;white-space:nowrap}.tab.active{background:#171717;color:#fff;border-color:#171717}.smallbtn{border:1px solid var(--line);background:#fff;border-radius:10px;padding:7px 10px;font-size:12px}.row-actions{display:flex;gap:6px;margin-top:9px}.overdue{color:var(--danger)}.soon{color:var(--warn)}
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="top"><div class="brand">Amanda · Assistente</div><div id="date" class="date"></div></div>
+  <div class="hero"><h1 id="greeting">Bom dia, Amanda.</h1><p id="heroText">Eu organizo o que está na sua cabeça. Você só precisa me contar.</p></div>
+  <div class="tabs"><button class="tab active" data-view="today">Hoje</button><button class="tab" data-view="chat">Conversar</button><button class="tab" data-view="memory">Memória</button></div>
+  <div id="todayView">
+    <div class="section"><h2>🔴 AGORA</h2><div id="now"></div></div>
+    <div class="section"><h2>🟡 HOJE</h2><div id="today"></div></div>
+    <div class="section"><h2>📅 PRÓXIMOS DIAS</h2><div id="upcoming"></div></div>
+    <div class="section"><h2>✅ CONCLUÍDO</h2><div id="done"></div></div>
+  </div>
+  <div id="chatView" class="chat"><div id="messages"></div></div>
+  <div id="memoryView" class="chat"><div class="card"><b>Como usar</b><p style="color:#666;font-size:13px;line-height:1.5">Fale ou escreva normalmente. Exemplos: “dia 20 pagar aluguel”, “me lembra daqui a 5 dias de conferir o material do Luiz”, “fechei o Luiz Henrique” ou “já tomei meu remédio e fui à academia”. O sistema guarda e organiza.</p></div><div id="memoryList"></div></div>
+</div>
+<div class="composer"><button id="mic" class="mic" title="Falar">🎙️</button><input id="input" placeholder="Fale ou escreva…"><button id="send" class="send">➤</button></div>
+<script>
+const KEY='amanda_assistente_v01';
+let state=JSON.parse(localStorage.getItem(KEY)||'null')||{tasks:[],messages:[]};
+const save=()=>{localStorage.setItem(KEY,JSON.stringify(state));render()};
+const id=()=>crypto.randomUUID?crypto.randomUUID():Date.now()+Math.random();
+const todayISO=()=>{const d=new Date();return d.toISOString().slice(0,10)};
+const addDays=(n)=>{const d=new Date();d.setDate(d.getDate()+n);return d.toISOString().slice(0,10)};
+const fmt=(s)=>{if(!s)return '';const [y,m,d]=s.split('-');return `${d}/${m}`};
+function normalize(s){return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')}
+function parseDate(text){const n=normalize(text);let m=n.match(/dia\s+(\d{1,2})(?:\s+de\s+([a-z]+))?/);if(m){let day=+m[1], month=m[2]?({janeiro:0,fevereiro:1,marco:2,abril:3,maio:4,junho:5,julho:6,agosto:7,setembro:8,outubro:9,novembro:10,dezembro:11}[m[2]]):new Date().getMonth();let y=new Date().getFullYear();let d=new Date(y,month,day);if(d<new Date(new Date().setHours(0,0,0,0))&&!m[2])d.setFullYear(y+1);return d.toISOString().slice(0,10)}
+let r=n.match(/daqui a (\d+) dias?/);if(r)return addDays(+r[1]);
+r=n.match(/amanha/);if(r)return addDays(1);r=n.match(/depois de amanha/);if(r)return addDays(2);r=n.match(/sexta|sexta-feira/);if(r){let d=new Date(),delta=(5-d.getDay()+7)%7;if(delta===0)delta=7;d.setDate(d.getDate()+delta);return d.toISOString().slice(0,10)}return null}
+function addTask(title,date=null,cat='geral',priority='normal',recurring=false){state.tasks.push({id:id(),title:title.trim(),date,cat,priority,done:false,created:new Date().toISOString(),recurring});}
+function workflow(text){const n=normalize(text);let client=null;let m=text.match(/(?:cliente\s+|pedido\s+|fechei\s+)([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ ]{2,40})/i);if(m)client=m[1].trim().replace(/[.,]+$/,'');if(n.includes('fechei')||n.includes('fechou o pedido')||n.includes('pedido fechado')){const c=client||'novo cliente';['Conferir pagamento/sinal','Sinalizar chapa/material','Conferir medidas','Conferir desenho','Liberar próxima etapa'].forEach((x,i)=>addTask(`${x} — ${c}`,i===0?todayISO():addDays(1), 'trabalho',i<2?'alta':'normal'));return `Entendi. Registrei o fechamento de **${c}** e criei o fluxo inicial do pedido. Primeiro: conferir pagamento/sinal. Depois: sinalizar chapa/material.`}
+return null}
+function handle(text){const raw=text.trim();if(!raw)return;state.messages.push({who:'me',text:raw,at:Date.now()});let n=normalize(raw);let response=workflow(raw);if(!response){let date=parseDate(raw);let recurring=/todo mes|todos os meses|mensal/.test(n);let priority=/urgente|nao posso esquecer|importante|obrigatorio/.test(n)?'alta':'normal';let cat=/aluguel|fatura|cartao|conta|pagar|pix|boleto/.test(n)?'financeiro':/cliente|pedido|chapa|material|producao|orcamento|fornecedor/.test(n)?'trabalho':/academia|banho|cafe|agua|remedio|medicacao|dormir|acordar/.test(n)?'rotina':'geral';if(/ja |já |tomei|fiz |fui |conclui|concluí|feito|marque/.test(n)&&!date){response=markByWords(raw);}
+else {let clean=raw.replace(/me lembra|lembra|lembrar|dia \d{1,2}|daqui a \d+ dias?|amanha|depois de amanha/gi,'').trim();if(clean.length<3)clean=raw;addTask(clean,date,cat,priority,recurring);response=date?`Certo. Guardei: **${clean}** para **${fmt(date)}**.`:`Guardei: **${clean}**. Quando você quiser, eu organizo o próximo passo.`;if(recurring)response+=` Vou tratar como recorrente.`}}
+state.messages.push({who:'bot',text:response,at:Date.now()});save();speak(response)}
+function markByWords(raw){let n=normalize(raw);let changed=[];state.tasks.forEach(t=>{let tn=normalize(t.title);let words=n.replace(/ja |já |tomei|fiz |fui |conclui|concluí|feito|marque/g,'').split(/\s+/).filter(x=>x.length>3);if(words.some(w=>tn.includes(w))){t.done=true;changed.push(t.title)}});return changed.length?`Perfeito. Marquei como concluído: **${changed.join(', ')}**.`:'Entendi. Se você me disser exatamente o que fez, eu marco para você.'}
+function toggle(id){let t=state.tasks.find(x=>x.id===id);if(t){t.done=!t.done;save()}}
+function card(t){let overdue=t.date&&t.date<todayISO()&&!t.done;return `<div class="card"><div class="task"><button class="check ${t.done?'done':''}" onclick="toggle('${t.id}')"></button><div class="task-main"><div class="task-title ${overdue?'overdue':''}">${escapeHtml(t.title)}</div><div class="task-meta">${t.date?('📅 '+fmt(t.date)):'Sem data'} · ${t.cat}</div></div><span class="pill">${t.priority}</span></div></div>`}
+function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function render(){const d=new Date();document.getElementById('date').textContent=d.toLocaleDateString('pt-BR',{weekday:'long',day:'2-digit',month:'long'});document.getElementById('greeting').textContent=(d.getHours()<12?'Bom dia':d.getHours()<18?'Boa tarde':'Boa noite')+', Amanda.';let pending=state.tasks.filter(t=>!t.done).sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999'));let now=pending[0];document.getElementById('now').innerHTML=now?card(now):'<div class="empty">Nada urgente. Você está em dia. ❤️</div>';document.getElementById('today').innerHTML=pending.filter(t=>t.date===todayISO()&&t.id!==now?.id).map(card).join('')||'<div class="empty">Nenhuma outra tarefa para hoje.</div>';document.getElementById('upcoming').innerHTML=pending.filter(t=>t.date&&t.date>todayISO()).slice(0,8).map(card).join('')||'<div class="empty">Nenhum compromisso futuro registrado.</div>';document.getElementById('done').innerHTML=state.tasks.filter(t=>t.done).slice(-6).reverse().map(card).join('')||'<div class="empty">Ainda não há concluídos.</div>';document.getElementById('messages').innerHTML=state.messages.slice(-30).map(m=>`<div class="msg ${m.who==='me'?'me':'bot'}">${escapeHtml(m.text).replace(/\*\*(.*?)\*\*/g,'<b>$1</b>')}</div>`).join('');document.getElementById('memoryList').innerHTML=state.tasks.filter(t=>!t.done).sort((a,b)=>(a.date||'9999').localeCompare(b.date||'9999')).map(card).join('')||'<div class="empty">Sua memória está limpa.</div>'}
+function speak(text){if('speechSynthesis' in window){speechSynthesis.cancel();let u=new SpeechSynthesisUtterance(text.replace(/\*\*/g,''));u.lang='pt-BR';u.rate=.98;speechSynthesis.speak(u)}}
+document.getElementById('send').onclick=()=>{let i=document.getElementById('input');handle(i.value);i.value=''};document.getElementById('input').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();document.getElementById('send').click()}});
+let rec=null;if('webkitSpeechRecognition' in window||'SpeechRecognition' in window){const SR=window.SpeechRecognition||window.webkitSpeechRecognition;rec=new SR();rec.lang='pt-BR';rec.interimResults=false;rec.onresult=e=>{document.getElementById('input').value=e.results[0][0].transcript;document.getElementById('send').click()};rec.onend=()=>document.getElementById('mic').classList.remove('listening')}
+document.getElementById('mic').onclick=()=>{if(!rec){alert('Seu navegador não liberou reconhecimento de voz. Use o Chrome no Android.');return}document.getElementById('mic').classList.add('listening');rec.start()};
+document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>{document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');document.getElementById('todayView').style.display=b.dataset.view==='today'?'block':'none';document.getElementById('chatView').classList.toggle('active',b.dataset.view==='chat');document.getElementById('memoryView').classList.toggle('active',b.dataset.view==='memory')});
+if('serviceWorker' in navigator)navigator.serviceWorker.register('sw.js');
+render();
+</script>
+</body>
+</html>
